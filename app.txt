@@ -1,0 +1,79 @@
+// File: server.js (Backend Entry Point)
+const express = require('express');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const db = require('./db');
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+// Basic routes for auth and role-based handling here
+// Example: Signup
+app.post('/api/signup', async (req, res) => {
+  const { name, email, password, address, role } = req.body;
+  const hashedPassword = await bcrypt.hash(password, 10);
+  try {
+    await db.query('INSERT INTO users (name, email, password, address, role) VALUES (?, ?, ?, ?, ?)', [name, email, hashedPassword, address, role || 'user']);
+    res.status(200).json({ message: 'User registered' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Example: Login
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+  const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+  const user = rows[0];
+  if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: 'Invalid credentials' });
+  const token = jwt.sign({ id: user.id, role: user.role }, 'secret');
+  res.json({ token });
+});
+
+app.listen(3001, () => console.log('Backend running on http://localhost:3001'));
+
+// File: db.js (Database Connection)
+const mysql = require('mysql2/promise');
+module.exports = mysql.createPool({
+  host: 'localhost',
+  user: 'root',
+  password: '',
+  database: 'store_ratings'
+});
+
+// File: App.js (React Entry Point)
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+function App() {
+  const [stores, setStores] = useState([]);
+  const [rating, setRating] = useState(0);
+
+  useEffect(() => {
+    axios.get('http://localhost:3001/api/stores').then(res => setStores(res.data));
+  }, []);
+
+  const submitRating = (storeId) => {
+    axios.post(http://localhost:3001/api/stores/${storeId}/rate, { rating })
+      .then(() => alert('Rating submitted'))
+      .catch(err => console.error(err));
+  };
+
+  return (
+    <div className="p-4">
+      <h1 className="text-xl font-bold">Stores</h1>
+      {stores.map(store => (
+        <div key={store.id} className="my-2 p-2 border rounded">
+          <h2>{store.name}</h2>
+          <p>{store.address}</p>
+          <input type="number" min="1" max="5" value={rating} onChange={e => setRating(Number(e.target.value))} />
+          <button onClick={() => submitRating(store.id)}>Rate</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default App;
